@@ -34,20 +34,10 @@ model.inject_memory(
     update_memory=True
 )
 
-# Test generation (using pretrained model format)
-question = "What fruits does David like?"
-prompt = f"Question: {question} Answer:"
-
-inputs = tokenizer(prompt, return_tensors='pt', add_special_tokens=False).input_ids.cuda()
+# Test generation (exactly as README shows for pretrained model)
+inputs = tokenizer("Question: What fruits does David like? Answer: David likes", return_tensors='pt', add_special_tokens=False).input_ids.cuda()
 
 print("Generating response...")
-outputs = model.generate(
-    input_ids=inputs,
-    max_new_tokens=50,
-    do_sample=True,
-    temperature=0.7
-)
-
-# Decode only the generated part (skip the input prompt)
-response = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
+outputs = model.generate(input_ids=inputs, max_new_tokens=20)
+response = tokenizer.decode(outputs[0][inputs.shape[1]:])
 print("Response:", response)
