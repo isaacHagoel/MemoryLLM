@@ -2,7 +2,7 @@
 
 ## RunPod Setup
 
-1. Allocate machine - **Recommended: A100 40GB or A100 80GB** for memory operations, RTX 4090 24GB works for basic inference but may hit memory limits during memory injection. Go to pod view, click the hamburger menu → edit pod → increase persistent disk space to 60GB
+1. Allocate machine - **Recommended: RTX 6000 Ada** for memory operations, RTX 4090 24GB works for basic inference but may hit memory limits during memory injection. Go to pod view, click the hamburger menu → edit pod → increase persistent disk space to 60GB
 
 2. Select a PyTorch 2.2 template (e.g., "RunPod PyTorch 2.2")
 
