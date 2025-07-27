@@ -68,6 +68,13 @@ if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
     print(f"Set pad_token to eos_token: {tokenizer.pad_token}")
 
+# Additional tokenizer setup for chat models  
+if model_type == "chat":
+    # Chat models may need additional tokenizer configuration
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+    print(f"Chat model tokenizer setup - pad_token_id: {tokenizer.pad_token_id}")
+
 # Move to GPU early to avoid Flash Attention warnings  
 model = model.to('cuda')  # Use .to('cuda') as recommended by Flash Attention
 model = model.to(torch.bfloat16)  # need to call it again to cast the `inv_freq` in rotary_emb to bfloat16 as well
@@ -106,7 +113,12 @@ def inject_memory():
         data = request.json
         context = data.get('context', '')
         
-        if len(context.split()) < 16:
+        # Debug: Show context info
+        context_tokens = len(context.split())
+        context_chars = len(context)
+        print(f"Injecting memory - {context_tokens} tokens, {context_chars} characters")
+        
+        if context_tokens < 16:
             return jsonify({'error': 'Context must be at least 16 tokens'}), 400
         
         # Aggressive memory cleanup before injection
@@ -121,28 +133,41 @@ def inject_memory():
         with torch.no_grad():  # Use no_grad as in longbench_pred.py
             # Tokenize context
             context_ids = tokenizer(context, return_tensors='pt', add_special_tokens=False).input_ids.cuda()
+            print(f"Tokenized to {context_ids.shape[1]} tokens")
             
-            # Use attention mask pattern from longbench_pred.py for memory models
-            if hasattr(model, 'num_tokens'):
-                context_attention_mask = torch.ones(context_ids.shape[-1] + model.num_tokens).long().unsqueeze(0).cuda()
-                
+            # Different approaches for different model types
+            if model_type == "chat":
+                # MemoryLLM chat model - use simple injection (based on README)
                 model.inject_memory(
                     context_ids,
-                    context_attention_mask,
                     update_memory=True
                 )
+                print("Injected using chat model method")
             else:
-                # Fallback for models without memory tokens (shouldn't happen)
-                model.inject_memory(
-                    context_ids,
-                    update_memory=True
-                )
+                # MPlus model - use attention mask pattern from longbench_pred.py
+                if hasattr(model, 'num_tokens'):
+                    context_attention_mask = torch.ones(context_ids.shape[-1] + model.num_tokens).long().unsqueeze(0).cuda()
+                    
+                    model.inject_memory(
+                        context_ids,
+                        context_attention_mask,
+                        update_memory=True
+                    )
+                    print("Injected using MPlus method with attention mask")
+                else:
+                    # Fallback
+                    model.inject_memory(
+                        context_ids,
+                        update_memory=True
+                    )
+                    print("Injected using fallback method")
         
         # Clean up after injection
         torch.cuda.empty_cache()
         
         return jsonify({'status': 'Memory updated successfully'})
     except Exception as e:
+        print(f"Memory injection error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/chat', methods=['POST'])
@@ -175,10 +200,12 @@ def chat():
                     eos_token_id=terminators,
                     num_beams=1,
                     do_sample=False,
-                    temperature=1.0
+                    temperature=1.0,
+                    pad_token_id=tokenizer.eos_token_id  # Set pad token to fix warnings
                 )
                 
-                response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+                # Decode only the new tokens (skip the input prompt)
+                response = tokenizer.decode(outputs[0][input_ids.shape[1]:], skip_special_tokens=True)
                 
             else:  # pretrained model (MPlus or MemoryLLM)
                 # Use pretrained format from README
@@ -195,7 +222,8 @@ def chat():
                         max_new_tokens=max_tokens,
                         num_beams=1,
                         do_sample=False,
-                        temperature=1.0
+                        temperature=1.0,
+                        pad_token_id=tokenizer.eos_token_id  # Set pad token to fix warnings
                     )
                 else:
                     # Fallback for models without memory
@@ -204,7 +232,8 @@ def chat():
                         max_new_tokens=max_tokens,
                         num_beams=1,
                         do_sample=False,
-                        temperature=1.0
+                        temperature=1.0,
+                        pad_token_id=tokenizer.eos_token_id  # Set pad token to fix warnings
                     )
                 
                 # Decode only the new tokens (skip the input prompt)
