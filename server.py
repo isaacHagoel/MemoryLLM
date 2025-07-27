@@ -19,7 +19,6 @@ os.makedirs(cache_dir, exist_ok=True)
 # Load model once at startup
 print("Loading MemoryLLM...")
 
-
 from modeling_mplus import MPlus
 
 model = MPlus.from_pretrained(
@@ -27,7 +26,7 @@ model = MPlus.from_pretrained(
     attn_implementation="flash_attention_2", 
     torch_dtype=torch.bfloat16,
     cache_dir=cache_dir,
-    low_cpu_mem_usage=True  # More conservative memory loading
+    low_cpu_mem_usage=True
 )
 tokenizer = AutoTokenizer.from_pretrained(
     "YuWangX/mplus-8b",
