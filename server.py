@@ -71,7 +71,11 @@ if tokenizer.pad_token is None:
 # Move to GPU early to avoid Flash Attention warnings  
 model = model.to('cuda')  # Use .to('cuda') as recommended by Flash Attention
 model = model.to(torch.bfloat16)  # need to call it again to cast the `inv_freq` in rotary_emb to bfloat16 as well
-model.put_ltm_to_numpy()  # Important for M+ model
+
+# MPlus-specific setup (only for mplus model)
+if args.model == "mplus":
+    model.put_ltm_to_numpy()  # Important for M+ model only
+    print("Applied MPlus-specific setup (put_ltm_to_numpy)")
 
 # Clear any fragmented memory after model loading
 torch.cuda.empty_cache()
