@@ -145,6 +145,11 @@ curl -X POST http://localhost:8888/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "What does Alice like to eat?", "max_tokens": 50}'
 
+# Alternative: Detailed chat for better memory retrieval
+curl -X POST http://localhost:8888/chat_detailed \
+  -H "Content-Type: application/json" \
+  -d '{"message": "what did they discuss about careers?", "max_tokens": 150}'
+
 # Optional: Inject large content from file
 # curl -X POST http://localhost:8888/inject_memory -H "Content-Type: application/json" -d "$(jq -n --rawfile content ./input.txt '{context: $content}')"
 
@@ -166,6 +171,18 @@ curl -X POST http://localhost:8888/chat \
 - Added proper `attention_mask` in generation
 - Added `repetition_penalty` to reduce repetitive output
 - Proper token decoding to skip input prompt
+
+### Generation Quality Improvements
+**Issues Fixed:**
+- **Deterministic responses**: Changed from `do_sample=False` to `do_sample=True, temperature=0.7`
+- **Repetition loops**: Added `repetition_penalty=1.2` to prevent getting stuck
+- **Memory retrieval**: Added `/chat_detailed` endpoint with improved prompting for better memory access
+- **Debug output**: Added memory state debugging to understand retrieval patterns
+
+**Usage:**
+- Use `/chat` for normal conversations
+- Use `/chat_detailed` for questions requiring deeper memory retrieval
+- Check server logs for memory debugging information
 
 ### Chat Behavior Options
 

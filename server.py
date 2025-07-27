@@ -177,6 +177,14 @@ def chat():
         message = data.get('message', '')
         max_tokens = data.get('max_tokens', 100)
         
+        # Debug: Show model memory info
+        if hasattr(model, 'memory') and hasattr(model.memory, 'data'):
+            memory_shape = model.memory.data.shape
+            print(f"Model memory shape: {memory_shape}")
+            # Show if memory contains content (non-zero check)
+            memory_nonzero = torch.any(model.memory.data != 0).item()
+            print(f"Memory contains data: {memory_nonzero}")
+        
         with torch.no_grad():  # Use no_grad as in longbench_pred.py
             if model_type == "chat":
                 # Use proper chat template for chat models (from README)
@@ -199,8 +207,9 @@ def chat():
                     max_new_tokens=max_tokens,
                     eos_token_id=terminators,
                     num_beams=1,
-                    do_sample=False,
-                    temperature=1.0,
+                    do_sample=True,  # Enable sampling for varied responses
+                    temperature=0.7,  # Lower temperature for more focused responses
+                    repetition_penalty=1.2,  # Reduce repetition
                     pad_token_id=tokenizer.eos_token_id  # Set pad token to fix warnings
                 )
                 
@@ -221,8 +230,9 @@ def chat():
                         attention_mask=attention_mask,
                         max_new_tokens=max_tokens,
                         num_beams=1,
-                        do_sample=False,
-                        temperature=1.0,
+                        do_sample=True,  # Enable sampling for varied responses
+                        temperature=0.7,  # Lower temperature for more focused responses
+                        repetition_penalty=1.2,  # Reduce repetition
                         pad_token_id=tokenizer.eos_token_id  # Set pad token to fix warnings
                     )
                 else:
@@ -231,12 +241,86 @@ def chat():
                         input_ids=input_ids,
                         max_new_tokens=max_tokens,
                         num_beams=1,
-                        do_sample=False,
-                        temperature=1.0,
+                        do_sample=True,  # Enable sampling for varied responses
+                        temperature=0.7,  # Lower temperature for more focused responses
+                        repetition_penalty=1.2,  # Reduce repetition
                         pad_token_id=tokenizer.eos_token_id  # Set pad token to fix warnings
                     )
                 
                 # Decode only the new tokens (skip the input prompt)
+                response = tokenizer.decode(outputs[0][input_ids.shape[1]:], skip_special_tokens=True)
+        
+        return jsonify({'response': response.strip()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/chat_detailed', methods=['POST'])
+def chat_detailed():
+    """Alternative chat endpoint with better memory prompting"""
+    try:
+        data = request.json
+        message = data.get('message', '')
+        max_tokens = data.get('max_tokens', 150)
+        
+        # Try more specific prompting for memory retrieval
+        detailed_prompt = f"Based on the conversation history and context, {message} Please provide a detailed answer with specific examples."
+        
+        with torch.no_grad():
+            if model_type == "chat":
+                messages = [{'role': 'user', 'content': detailed_prompt}]
+                inputs = tokenizer.apply_chat_template(
+                    messages, 
+                    return_tensors="pt", 
+                    add_generation_prompt=True
+                )[:, 1:]
+                input_ids = inputs.cuda()
+                
+                terminators = [
+                    tokenizer.eos_token_id,
+                    tokenizer.convert_tokens_to_ids("<|eot_id|>")
+                ]
+                
+                outputs = model.generate(
+                    input_ids=input_ids,
+                    max_new_tokens=max_tokens,
+                    eos_token_id=terminators,
+                    num_beams=1,
+                    do_sample=True,
+                    temperature=0.7,
+                    repetition_penalty=1.2,
+                    pad_token_id=tokenizer.eos_token_id
+                )
+                
+                response = tokenizer.decode(outputs[0][input_ids.shape[1]:], skip_special_tokens=True)
+                
+            else:  # pretrained model
+                prompt = f"Question: {detailed_prompt} Answer:"
+                input_ids = tokenizer(prompt, return_tensors='pt', add_special_tokens=False).input_ids.cuda()
+                
+                if hasattr(model, 'num_blocks') and hasattr(model, 'num_tokens'):
+                    attention_mask = torch.ones(input_ids.shape[-1] + model.num_blocks * model.num_tokens).unsqueeze(0).long().cuda()
+                    
+                    outputs = model.generate(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        max_new_tokens=max_tokens,
+                        num_beams=1,
+                        do_sample=True,
+                        temperature=0.7,
+                        repetition_penalty=1.2,
+                        pad_token_id=tokenizer.eos_token_id
+                    )
+                else:
+                    outputs = model.generate(
+                        input_ids=input_ids,
+                        max_new_tokens=max_tokens,
+                        num_beams=1,
+                        do_sample=True,
+                        temperature=0.7,
+                        repetition_penalty=1.2,
+                        pad_token_id=tokenizer.eos_token_id
+                    )
+                
                 response = tokenizer.decode(outputs[0][input_ids.shape[1]:], skip_special_tokens=True)
         
         return jsonify({'response': response.strip()})
