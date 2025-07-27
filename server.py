@@ -40,7 +40,39 @@ model.put_ltm_to_numpy()  # Important for M+ model
 
 # Clear any fragmented memory after model loading
 torch.cuda.empty_cache()
+
+# Debug memory usage
+free_memory, total_memory = torch.cuda.mem_get_info()
+used_memory = total_memory - free_memory
 print(f"Model loaded and memory cleared")
+print(f"GPU Memory after loading: {used_memory / 1024**3:.2f} GB / {total_memory / 1024**3:.2f} GB")
+print(f"Model parameters: {sum(p.numel() for p in model.parameters()) / 1_000_000_000:.2f}B parameters")
+
+# Check model precision
+sample_param = next(model.parameters())
+print(f"Model dtype: {sample_param.dtype}")
+print(f"Model device: {sample_param.device}")
+
+# Check memory breakdown by component
+model_params = sum(p.numel() * p.element_size() for p in model.parameters()) / 1024**3
+print(f"Model parameter memory: {model_params:.2f} GB")
+
+# Check if gradients are being stored unnecessarily
+total_grad_params = 0
+for name, param in model.named_parameters():
+    if param.requires_grad:
+        total_grad_params += param.numel()
+if total_grad_params > 0:
+    print(f"WARNING: {total_grad_params / 1_000_000_000:.2f}B parameters have gradients enabled!")
+    print("This could double memory usage. Setting requires_grad=False for inference...")
+    for param in model.parameters():
+        param.requires_grad = False
+    torch.cuda.empty_cache()
+    
+    # Check memory again
+    free_memory, total_memory = torch.cuda.mem_get_info()
+    used_memory = total_memory - free_memory
+    print(f"GPU Memory after disabling gradients: {used_memory / 1024**3:.2f} GB / {total_memory / 1024**3:.2f} GB")
 
 
 
