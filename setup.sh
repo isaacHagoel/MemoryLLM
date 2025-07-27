@@ -12,59 +12,21 @@ if [[ ! -f "requirements.txt" ]]; then
     exit 1
 fi
 
-# Update system packages (note: these will be lost on container restart)
-echo "Updating system packages..."
-apt update && apt upgrade -y
-
-# Install essential build tools (temporary, for downloading static binaries)
-echo "Installing temporary build tools..."
-apt install wget curl -y
+# Install system packages using separate script
+echo "Installing system packages..."
+chmod +x install_system_packages.sh
+./install_system_packages.sh
 
 # Set up persistent directories
 echo "Setting up persistent directories..."
 mkdir -p /workspace/.cache/huggingface
 mkdir -p /workspace/.cache/pip
-mkdir -p /workspace/bin
-
-# Install persistent vim (static binary)
-echo "Installing persistent vim..."
-if [[ ! -f "/workspace/bin/vim" ]]; then
-    cd /workspace/bin
-    # Download static vim binary (AppImage)
-    wget -O vim.appimage https://github.com/vim/vim-appimage/releases/latest/download/Vim-x86_64.AppImage
-    chmod +x vim.appimage
-    ln -sf vim.appimage vim
-    cd - > /dev/null
-    echo "Vim installed to /workspace/bin/vim"
-else
-    echo "Vim already installed in /workspace/bin/"
-fi
-
-# Install persistent less (static binary)
-echo "Installing persistent less..."
-if [[ ! -f "/workspace/bin/less" ]]; then
-    cd /workspace/bin
-    # Download and compile less from source to get a static version
-    wget http://www.greenwoodsoftware.com/less/less-590.tar.gz
-    tar -xzf less-590.tar.gz
-    cd less-590
-    ./configure --prefix=/workspace
-    make
-    make install
-    cd ..
-    rm -rf less-590 less-590.tar.gz
-    cd - > /dev/null
-    echo "Less installed to /workspace/bin/less"
-else
-    echo "Less already installed in /workspace/bin/"
-fi
 
 # Set up environment variables for persistent storage
 export HF_HOME=/workspace/.cache/huggingface
 export HUGGINGFACE_HUB_CACHE=/workspace/.cache/huggingface
 export TRANSFORMERS_CACHE=/workspace/.cache/huggingface
 export PIP_CACHE_DIR=/workspace/.cache/pip
-export PATH="/workspace/bin:$PATH"
 
 # Upgrade pip with persistent cache
 echo "Upgrading pip..."
@@ -105,9 +67,6 @@ export HUGGINGFACE_HUB_CACHE=/workspace/.cache/huggingface
 export TRANSFORMERS_CACHE=/workspace/.cache/huggingface
 export PIP_CACHE_DIR=/workspace/.cache/pip
 
-# Add persistent tools to PATH
-export PATH="/workspace/bin:$PATH"
-
 # Activate virtual environment if it exists
 if [ -f "/workspace/MemoryLLM/venv/bin/activate" ]; then
     source /workspace/MemoryLLM/venv/bin/activate
@@ -116,18 +75,8 @@ else
     echo "Warning: Virtual environment not found at /workspace/MemoryLLM/venv/"
 fi
 
-# Verify persistent tools are available
-if command -v vim >/dev/null 2>&1; then
-    echo "Vim available at: $(which vim)"
-else
-    echo "Warning: Vim not found in PATH"
-fi
-
-if command -v less >/dev/null 2>&1; then
-    echo "Less available at: $(which less)"
-else
-    echo "Warning: Less not found in PATH"
-fi
+echo "Environment setup complete!"
+echo "Note: Run './install_system_packages.sh' if vim/less are missing"
 EOF
 
 chmod +x /workspace/setup_env.sh
@@ -136,7 +85,8 @@ echo "Setup completed successfully!"
 echo ""
 echo "IMPORTANT NOTES:"
 echo "1. All Python packages and caches are stored in /workspace (persistent)"
-echo "2. Vim and less are now installed persistently in /workspace/bin/"
-echo "3. After container restart, run: source /workspace/setup_env.sh"
-echo "4. To activate the virtual environment: source /workspace/MemoryLLM/venv/bin/activate"
-echo "5. Persistent tools available: vim, less" 
+echo "2. System packages (vim, less) will be lost on container restart"
+echo "3. After container restart:"
+echo "   a) Run: source /workspace/setup_env.sh"
+echo "   b) Run: ./install_system_packages.sh (to reinstall vim, less, etc.)"
+echo "4. To activate the virtual environment: source /workspace/MemoryLLM/venv/bin/activate" 

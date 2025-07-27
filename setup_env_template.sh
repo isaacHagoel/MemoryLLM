@@ -8,9 +8,6 @@ export HUGGINGFACE_HUB_CACHE=/workspace/.cache/huggingface
 export TRANSFORMERS_CACHE=/workspace/.cache/huggingface
 export PIP_CACHE_DIR=/workspace/.cache/pip
 
-# Add persistent tools to PATH
-export PATH="/workspace/bin:$PATH"
-
 # Activate virtual environment if it exists
 if [ -f "/workspace/MemoryLLM/venv/bin/activate" ]; then
     source /workspace/MemoryLLM/venv/bin/activate
@@ -19,15 +16,5 @@ else
     echo "Warning: Virtual environment not found at /workspace/MemoryLLM/venv/"
 fi
 
-# Verify persistent tools are available
-if command -v vim >/dev/null 2>&1; then
-    echo "Vim available at: $(which vim)"
-else
-    echo "Warning: Vim not found in PATH"
-fi
-
-if command -v less >/dev/null 2>&1; then
-    echo "Less available at: $(which less)"
-else
-    echo "Warning: Less not found in PATH"
-fi 
+echo "Environment setup complete!"
+echo "Note: Run './install_system_packages.sh' if vim/less are missing" 

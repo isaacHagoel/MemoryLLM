@@ -47,20 +47,26 @@
 
 ## After Container Restart
 
-When the RunPod container restarts, all Python packages, model caches, and tools (vim, less) are preserved in `/workspace`. To restore the environment:
+When the RunPod container restarts, all Python packages and model caches are preserved in `/workspace`, but system packages (vim, less) are lost. To restore the environment:
 
 1. SSH back to the machine
 2. Set up the environment:
    ```bash
-   
+   source /workspace/setup_env.sh
+   ```
+3. Reinstall system packages:
+   ```bash
+   cd /workspace/MemoryLLM
+   ./install_system_packages.sh
    ```
    
-   *Note: This script is automatically created at `/workspace/setup_env.sh` during the initial setup. You can see what it does by checking `setup_env_template.sh` in this repo.*
-3. Navigate to the project:
+   *Note: The environment script is automatically created at `/workspace/setup_env.sh` during initial setup. You can see what it does by checking `setup_env_template.sh` in this repo.*
+
+4. Navigate to the project:
    ```bash
    cd /workspace/MemoryLLM
    ```
-4. Start the server:
+5. Start the server:
    ```bash
    python server.py &
    ```
@@ -71,5 +77,4 @@ When the RunPod container restarts, all Python packages, model caches, and tools
 - **Python packages**: Installed in venv (preserved)
 - **Model caches**: `/workspace/.cache/huggingface/` (preserved)
 - **Pip cache**: `/workspace/.cache/pip/` (preserved)
-- **Tools**: `/workspace/bin/` (vim, less - preserved)
-- **Other system packages**: May be lost on restart (but can be reinstalled via apt)
+- **System packages**: Lost on restart (vim, less, etc.) - reinstall with `./install_system_packages.sh`
