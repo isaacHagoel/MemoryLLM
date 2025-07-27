@@ -46,6 +46,10 @@ echo "Setting up virtual environment in ${VENV_DIR}..."
 python -m venv venv
 source venv/bin/activate
 
+# Install wheel first (required by many packages)
+echo "Installing wheel (required for modern package installation)..."
+pip install wheel --cache-dir "${PIP_CACHE_DIR}"
+
 # Install Python dependencies with persistent cache
 echo "Installing Python dependencies..."
 pip install -r requirements.txt --cache-dir "${PIP_CACHE_DIR}"
@@ -53,10 +57,6 @@ pip install -r requirements.txt --cache-dir "${PIP_CACHE_DIR}"
 # Install PyTorch with CUDA support
 echo "Installing PyTorch with CUDA support..."
 pip install torch==2.2.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 --cache-dir "${PIP_CACHE_DIR}"
-
-# Install wheel (required for flash-attn)
-echo "Installing wheel (required for flash-attn)..."
-pip install wheel --cache-dir "${PIP_CACHE_DIR}"
 
 # Install flash attention
 echo "Installing flash attention..."
