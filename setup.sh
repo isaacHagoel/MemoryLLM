@@ -54,6 +54,10 @@ pip install wheel --cache-dir "${PIP_CACHE_DIR}"
 echo "Installing Python dependencies..."
 pip install -r requirements.txt --cache-dir "${PIP_CACHE_DIR}"
 
+# Install compatible NumPy first (PyTorch 2.2.0 requires NumPy 1.x)
+echo "Installing compatible NumPy..."
+pip install "numpy<2" --cache-dir "${PIP_CACHE_DIR}"
+
 # Install PyTorch with CUDA support
 echo "Installing PyTorch with CUDA support..."
 pip install torch==2.2.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 --cache-dir "${PIP_CACHE_DIR}"
