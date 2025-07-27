@@ -46,8 +46,8 @@ python server.py --model chat
 ```
 
 **Model Comparison:**
-- **mplus**: MPlus-8B pretrained version with latest features (may continue Q&A patterns)
-- **chat**: MemoryLLM-8B-Chat purpose-built for conversations with proper chat stopping
+- **mplus**: MPlus-8B pretrained version with latest features (⚠️ WARNING: Has severe generation instability issues - produces gibberish with longer responses)
+- **chat**: MemoryLLM-8B-Chat purpose-built for conversations with proper chat stopping (🟢 RECOMMENDED for most use cases)
 
 8. Test the setup:
    ```bash
@@ -123,10 +123,6 @@ python server.py --model mplus
 python server.py --model chat
 ```
 
-**Model Comparison:**
-- **mplus**: MPlus-8B pretrained version with latest features (may continue Q&A patterns)
-- **chat**: MemoryLLM-8B-Chat purpose-built for conversations with proper chat stopping
-
 ## Persistent Storage Details
 
 - **Virtual environment**: `/workspace/MemoryLLM/venv/` (preserved)
@@ -150,8 +146,38 @@ curl -X POST http://localhost:8888/chat_detailed \
   -H "Content-Type: application/json" \
   -d '{"message": "what did they discuss about careers?", "max_tokens": 150}'
 
-# Optional: Inject large content from file
+# For large files: Use chunked injection (recommended for chat model)
+curl -X POST http://localhost:8888/inject_memory_chunked \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --rawfile content ./input.txt '{context: $content, chunk_size: 300}')"
+
+# Optional: Inject large content from file (single injection)
 # curl -X POST http://localhost:8888/inject_memory -H "Content-Type: application/json" -d "$(jq -n --rawfile content ./input.txt '{context: $content}')"
+
+## Memory Debugging
+
+If memory injection seems to work but retrieval fails, use these debugging endpoints:
+
+```bash
+# Inspect memory state
+curl http://localhost:8888/inspect_memory
+
+# Test basic memory functionality  
+curl -X POST http://localhost:8888/test_memory
+
+# Test using exact README approach
+curl -X POST http://localhost:8888/test_readme_approach
+```
+
+These help diagnose whether:
+- Memory is actually being stored
+- Basic retrieval works with simple English content  
+- The official README examples work as documented
+
+# Benchmark-style single-turn QA (exact pattern from repo)
+curl -X POST http://localhost:8888/qa \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What fruits does David like?", "max_tokens": 30}'
 
 ## Troubleshooting
 
