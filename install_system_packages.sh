@@ -15,8 +15,11 @@ apt install vim -y
 echo "Installing less..."
 apt install less -y
 
-echo "Installing wget and curl (if not already present)..."
-apt install wget curl -y
+echo "Installing curl (for API testing)..."
+apt install curl -y
+
+echo "Installing jq (for JSON processing)..."
+apt install jq -y
 
 echo "System packages installed successfully!"
-echo "Installed: vim, less, wget, curl" 
+echo "Installed: vim, less, curl, jq" 

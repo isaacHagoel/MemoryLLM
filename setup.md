@@ -2,7 +2,7 @@
 
 ## RunPod Setup
 
-1. Allocate machine - RTX 4090, go to pod view, click the hamburger menu → edit pod → increase persistent disk space to 60GB
+1. Allocate machine - **Recommended: A100 40GB or A100 80GB** for memory operations, RTX 4090 24GB works for basic inference but may hit memory limits during memory injection. Go to pod view, click the hamburger menu → edit pod → increase persistent disk space to 60GB
 
 2. Select a PyTorch 2.2 template (e.g., "RunPod PyTorch 2.2")
 
@@ -47,9 +47,20 @@
    
    *Note: The server uses MPlus-8B pretrained model with "Question: ... Answer:" format, not chat templates.*
 
+10. **Optional**: Inject large content from file:
+    ```bash
+    # Create a text file with your content
+    echo "Your long multiline content here..." > input.txt
+    
+    # Inject using jq to handle JSON formatting
+    curl -X POST http://localhost:8888/inject_memory \
+      -H "Content-Type: application/json" \
+      -d "$(jq -n --rawfile content ./input.txt '{context: $content}')"
+    ```
+
 ## After Container Restart
 
-When the RunPod container restarts, all Python packages and model caches are preserved in `/workspace`, but system packages (vim, less) are lost. To restore the environment:
+When the RunPod container restarts, all Python packages and model caches are preserved in `/workspace`, but system packages (vim, less, curl, jq) are lost. To restore the environment:
 
 1. SSH back to the machine
 2. Set up the environment:
@@ -79,4 +90,4 @@ When the RunPod container restarts, all Python packages and model caches are pre
 - **Python packages**: Installed in venv (preserved)
 - **Model caches**: `/workspace/.cache/huggingface/` (preserved)
 - **Pip cache**: `/workspace/.cache/pip/` (preserved)
-- **System packages**: Lost on restart (vim, less, etc.) - reinstall with `./install_system_packages.sh`
+- **System packages**: Lost on restart (vim, less, curl, jq) - reinstall with `./install_system_packages.sh`
