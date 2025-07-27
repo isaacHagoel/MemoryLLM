@@ -1,9 +1,17 @@
 from flask import Flask, request, jsonify
 import torch
 import os
+import argparse
+import sys
 from transformers import AutoTokenizer
 from modeling_memoryllm import MemoryLLM
 import logging
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='MemoryLLM Server')
+parser.add_argument('--model', choices=['mplus', 'chat'], default='mplus',
+                   help='Model to use: mplus (MPlus-8B pretrained) or chat (MemoryLLM-8B-Chat)')
+args = parser.parse_args()
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -16,41 +24,42 @@ print(f"Configured PyTorch for better memory fragmentation handling")
 cache_dir = "/workspace/.cache/huggingface"
 os.makedirs(cache_dir, exist_ok=True)
 
-# Load model once at startup
-print("Loading MemoryLLM...")
+# Load model based on command line argument
+print(f"Loading model: {args.model}")
 
-from modeling_mplus import MPlus
-
-# Option 1: MPlus-8B (pretrained, latest features)
-model = MPlus.from_pretrained(
-    "YuWangX/mplus-8b", 
-    attn_implementation="flash_attention_2", 
-    torch_dtype=torch.bfloat16,
-    cache_dir=cache_dir,
-    low_cpu_mem_usage=True
-)
-tokenizer = AutoTokenizer.from_pretrained(
-    "YuWangX/mplus-8b",
-    cache_dir=cache_dir
-)
-model_type = "pretrained"
-
-# Option 2: MemoryLLM-8B-Chat (proper chat model)
-# Uncomment these lines to use the chat model instead:
-#
-# from modeling_memoryllm import MemoryLLM
-# model = MemoryLLM.from_pretrained(
-#     "YuWangX/memoryllm-8b-chat", 
-#     attn_implementation="flash_attention_2", 
-#     torch_dtype=torch.bfloat16,
-#     cache_dir=cache_dir,
-#     low_cpu_mem_usage=True
-# )
-# tokenizer = AutoTokenizer.from_pretrained(
-#     "YuWangX/memoryllm-8b-chat",
-#     cache_dir=cache_dir
-# )
-# model_type = "chat"
+if args.model == "chat":
+    # MemoryLLM-8B-Chat (proper chat model)
+    from modeling_memoryllm import MemoryLLM
+    model = MemoryLLM.from_pretrained(
+        "YuWangX/memoryllm-8b-chat", 
+        attn_implementation="flash_attention_2", 
+        torch_dtype=torch.bfloat16,
+        cache_dir=cache_dir,
+        low_cpu_mem_usage=True
+    )
+    tokenizer = AutoTokenizer.from_pretrained(
+        "YuWangX/memoryllm-8b-chat",
+        cache_dir=cache_dir
+    )
+    model_type = "chat"
+    print("Using MemoryLLM-8B-Chat model")
+    
+else:  # mplus (default)
+    # MPlus-8B (pretrained version - latest features)
+    from modeling_mplus import MPlus
+    model = MPlus.from_pretrained(
+        "YuWangX/mplus-8b", 
+        attn_implementation="flash_attention_2", 
+        torch_dtype=torch.bfloat16,
+        cache_dir=cache_dir,
+        low_cpu_mem_usage=True
+    )
+    tokenizer = AutoTokenizer.from_pretrained(
+        "YuWangX/mplus-8b",
+        cache_dir=cache_dir
+    )
+    model_type = "pretrained"
+    print("Using MPlus-8B model")
 
 print(f"Loaded model type: {model_type}")
 
@@ -105,13 +114,25 @@ def inject_memory():
         gc.collect()
         torch.cuda.empty_cache()
         
-        # Check available memory
-        torch.cuda.mem_get_info()
-        
-        model.inject_memory(
-            tokenizer(context, return_tensors='pt', add_special_tokens=False).input_ids.cuda(),
-            update_memory=True
-        )
+        with torch.no_grad():  # Use no_grad as in longbench_pred.py
+            # Tokenize context
+            context_ids = tokenizer(context, return_tensors='pt', add_special_tokens=False).input_ids.cuda()
+            
+            # Use attention mask pattern from longbench_pred.py for memory models
+            if hasattr(model, 'num_tokens'):
+                context_attention_mask = torch.ones(context_ids.shape[-1] + model.num_tokens).long().unsqueeze(0).cuda()
+                
+                model.inject_memory(
+                    context_ids,
+                    context_attention_mask,
+                    update_memory=True
+                )
+            else:
+                # Fallback for models without memory tokens (shouldn't happen)
+                model.inject_memory(
+                    context_ids,
+                    update_memory=True
+                )
         
         # Clean up after injection
         torch.cuda.empty_cache()
@@ -127,69 +148,63 @@ def chat():
         message = data.get('message', '')
         max_tokens = data.get('max_tokens', 100)
         
-        if model_type == "chat":
-            # Use proper chat template for chat models
-            messages = [{'role': 'user', 'content': message}]
-            inputs = tokenizer.apply_chat_template(
-                messages, 
-                return_tensors="pt", 
-                add_generation_prompt=True
-            )[:, 1:]  # Remove bos tokens as model has trained bos embeddings
-            input_ids = inputs.cuda()
-            
-            # Chat model terminators
-            terminators = [
-                tokenizer.eos_token_id,
-                tokenizer.convert_tokens_to_ids("<|eot_id|>")
-            ]
-            
-            outputs = model.generate(
-                input_ids=input_ids,
-                max_new_tokens=max_tokens,
-                eos_token_id=terminators,
-                do_sample=True,
-                temperature=0.7,
-                repetition_penalty=1.1
-            )
-            
-            response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
-        else:  # pretrained model
-            # Use pretrained format: "Question: ... Answer:"
-            prompt = f"Question: {message} Answer:"
-            
-            # Tokenize with attention mask
-            inputs = tokenizer(prompt, return_tensors='pt', add_special_tokens=False)
-            input_ids = inputs.input_ids.cuda()
-            attention_mask = inputs.attention_mask.cuda()
-            
-            # Add stop tokens to prevent continuing the Q&A pattern
-            stop_strings = ["Question:", "\nQuestion:", "Q:", "\nQ:"]
-            stop_token_ids = []
-            for stop_str in stop_strings:
-                tokens = tokenizer.encode(stop_str, add_special_tokens=False)
-                if tokens:
-                    stop_token_ids.extend(tokens)
-            
-            outputs = model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                max_new_tokens=max_tokens,
-                do_sample=True,
-                temperature=0.7,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=[tokenizer.eos_token_id] + stop_token_ids,  # Stop at EOS or "Question:"
-                repetition_penalty=1.1
-            )
-            
-            # Decode only the new tokens (skip the input prompt)
-            response = tokenizer.decode(outputs[0][input_ids.shape[1]:], skip_special_tokens=True)
-            
-            # Additional cleanup: stop at first occurrence of "Question" or similar
-            for stop_word in ["Question:", "Q:", "\nQuestion", "\nQ"]:
-                if stop_word in response:
-                    response = response.split(stop_word)[0]
-                    break
+        with torch.no_grad():  # Use no_grad as in longbench_pred.py
+            if model_type == "chat":
+                # Use proper chat template for chat models (from README)
+                messages = [{'role': 'user', 'content': message}]
+                inputs = tokenizer.apply_chat_template(
+                    messages, 
+                    return_tensors="pt", 
+                    add_generation_prompt=True
+                )[:, 1:]  # Remove bos tokens as model has trained bos embeddings
+                input_ids = inputs.cuda()
+                
+                # Chat model terminators (from README)
+                terminators = [
+                    tokenizer.eos_token_id,
+                    tokenizer.convert_tokens_to_ids("<|eot_id|>")
+                ]
+                
+                outputs = model.generate(
+                    input_ids=input_ids,
+                    max_new_tokens=max_tokens,
+                    eos_token_id=terminators,
+                    num_beams=1,
+                    do_sample=False,
+                    temperature=1.0
+                )
+                
+                response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+                
+            else:  # pretrained model (MPlus or MemoryLLM)
+                # Use pretrained format from README
+                prompt = f"Question: {message} Answer:"
+                input_ids = tokenizer(prompt, return_tensors='pt', add_special_tokens=False).input_ids.cuda()
+                
+                # For memory models, use attention mask as in longbench_pred.py
+                if hasattr(model, 'num_blocks') and hasattr(model, 'num_tokens'):
+                    attention_mask = torch.ones(input_ids.shape[-1] + model.num_blocks * model.num_tokens).unsqueeze(0).long().cuda()
+                    
+                    outputs = model.generate(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        max_new_tokens=max_tokens,
+                        num_beams=1,
+                        do_sample=False,
+                        temperature=1.0
+                    )
+                else:
+                    # Fallback for models without memory
+                    outputs = model.generate(
+                        input_ids=input_ids,
+                        max_new_tokens=max_tokens,
+                        num_beams=1,
+                        do_sample=False,
+                        temperature=1.0
+                    )
+                
+                # Decode only the new tokens (skip the input prompt)
+                response = tokenizer.decode(outputs[0][input_ids.shape[1]:], skip_special_tokens=True)
         
         return jsonify({'response': response.strip()})
     except Exception as e:

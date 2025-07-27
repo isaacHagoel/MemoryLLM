@@ -33,6 +33,22 @@
    python server.py &
    ```
 
+### Model Selection Options
+
+Choose which model to use with command line parameters:
+
+```bash
+# Use MPlus-8B (default - pretrained version with latest features)  
+python server.py --model mplus
+
+# Use MemoryLLM-8B-Chat (better for conversations)
+python server.py --model chat
+```
+
+**Model Comparison:**
+- **mplus**: MPlus-8B pretrained version with latest features (may continue Q&A patterns)
+- **chat**: MemoryLLM-8B-Chat purpose-built for conversations with proper chat stopping
+
 8. Test the setup:
    ```bash
    curl http://localhost:8888/health
@@ -94,6 +110,22 @@ When the RunPod container restarts, all Python packages and model caches are pre
    ```bash
    python server.py &
    ```
+
+### Model Selection Options
+
+Choose which model to use with command line parameters:
+
+```bash
+# Use MPlus-8B (default - pretrained version with latest features)  
+python server.py --model mplus
+
+# Use MemoryLLM-8B-Chat (better for conversations)
+python server.py --model chat
+```
+
+**Model Comparison:**
+- **mplus**: MPlus-8B pretrained version with latest features (may continue Q&A patterns)
+- **chat**: MemoryLLM-8B-Chat purpose-built for conversations with proper chat stopping
 
 ## Persistent Storage Details
 
