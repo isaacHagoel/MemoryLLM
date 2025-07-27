@@ -33,17 +33,19 @@
 
 8. Test memory injection:
    ```bash
-   curl -X POST http://localhost:8000/inject_memory \
+   curl -X POST http://localhost:8888/inject_memory \
      -H "Content-Type: application/json" \
      -d '{"context": "Alice loves chocolate cake and mentioned she also enjoys vanilla ice cream during our conversation yesterday."}'
    ```
 
 9. Test chat functionality:
    ```bash
-   curl -X POST http://localhost:8000/chat \
+   curl -X POST http://localhost:8888/chat \
      -H "Content-Type: application/json" \
      -d '{"message": "What does Alice like to eat?", "max_tokens": 50}'
    ```
+   
+   *Note: The server uses MPlus-8B pretrained model with "Question: ... Answer:" format, not chat templates.*
 
 ## After Container Restart
 

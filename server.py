@@ -58,23 +58,20 @@ def chat():
         message = data.get('message', '')
         max_tokens = data.get('max_tokens', 100)
         
-        messages = [{'role': 'user', 'content': message}]
+        # Format for pretrained model (not chat model)
+        prompt = f"Question: {message} Answer:"
         
-        inputs = tokenizer.apply_chat_template(messages, return_tensors="pt", add_generation_prompt=True)[:, 1:]
-        terminators = [
-            tokenizer.eos_token_id,
-            tokenizer.convert_tokens_to_ids("<|eot_id|>")
-        ]
+        inputs = tokenizer(prompt, return_tensors='pt', add_special_tokens=False).input_ids.cuda()
         
         outputs = model.generate(
-            input_ids=inputs.cuda(),
+            input_ids=inputs,
             max_new_tokens=max_tokens,
-            eos_token_id=terminators,
             do_sample=True,
             temperature=0.7
         )
         
-        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # Decode only the generated part (skip the input prompt)
+        response = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
         return jsonify({'response': response})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

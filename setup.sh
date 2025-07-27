@@ -66,6 +66,10 @@ pip install flash-attn==2.5.8 --no-build-isolation --cache-dir "${PIP_CACHE_DIR}
 echo "Installing transformers..."
 pip install transformers==4.46.0 --cache-dir "${PIP_CACHE_DIR}"
 
+# Install peft (required for MPlus model)
+echo "Installing peft..."
+pip install peft --cache-dir "${PIP_CACHE_DIR}"
+
 # Install Flask (force reinstall to avoid dependency conflicts)
 echo "Installing Flask..."
 pip install flask --force-reinstall --no-deps --cache-dir "${PIP_CACHE_DIR}"

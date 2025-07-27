@@ -34,26 +34,20 @@ model.inject_memory(
     update_memory=True
 )
 
-# Test generation
-messages = [{
-    'role': 'user',
-    'content': "What fruits does David like?"
-}]
+# Test generation (using pretrained model format)
+question = "What fruits does David like?"
+prompt = f"Question: {question} Answer:"
 
-inputs = tokenizer.apply_chat_template(messages, return_tensors="pt", add_generation_prompt=True)[:, 1:]
-terminators = [
-    tokenizer.eos_token_id,
-    tokenizer.convert_tokens_to_ids("<|eot_id|>")
-]
+inputs = tokenizer(prompt, return_tensors='pt', add_special_tokens=False).input_ids.cuda()
 
 print("Generating response...")
 outputs = model.generate(
-    input_ids=inputs.cuda(),
+    input_ids=inputs,
     max_new_tokens=50,
-    eos_token_id=terminators,
     do_sample=True,
     temperature=0.7
 )
 
-response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+# Decode only the generated part (skip the input prompt)
+response = tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
 print("Response:", response)
