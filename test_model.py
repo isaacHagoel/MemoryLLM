@@ -1,30 +1,28 @@
 import torch
 import os
 from transformers import AutoTokenizer
-from modeling_memoryllm import MemoryLLM
+from modeling_mplus import MPlus
 
 # Set cache directory to persistent storage
 cache_dir = "/workspace/.cache/huggingface"
 os.makedirs(cache_dir, exist_ok=True)
 
-print("Loading MemoryLLM-8B model...")
+print("Loading MPlus-8B model...")
 
-# Load the chat model with explicit cache directory
-model = MemoryLLM.from_pretrained(
+# Load the model with explicit cache directory
+model = MPlus.from_pretrained(
     "YuWangX/mplus-8b",
     attn_implementation="flash_attention_2",
     torch_dtype=torch.bfloat16,
-    cache_dir=cache_dir,
-
+    cache_dir=cache_dir
 )
 tokenizer = AutoTokenizer.from_pretrained(
     "YuWangX/mplus-8b",
-    cache_dir=cache_dir,
-     device_map="auto"
+    cache_dir=cache_dir
 )
-model = model.to(torch.bfloat16)
-model.put_ltm_to_numpy()
-# model = model.cuda()
+model = model.to(torch.bfloat16)  # need to call it again to cast the `inv_freq` in rotary_emb to bfloat16 as well
+model.put_ltm_to_numpy()  # We include ltm as modules so that it can be uploaded to huggingface, but for inference we need to put ltm on CPU and cast ltm_ags to numpy
+model = model.cuda()
 print("Model loaded successfully!")
 
 # Test memory injection

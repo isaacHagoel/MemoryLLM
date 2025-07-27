@@ -22,16 +22,15 @@ model = MPlus.from_pretrained(
     "YuWangX/mplus-8b", 
     attn_implementation="flash_attention_2", 
     torch_dtype=torch.bfloat16,
-    cache_dir=cache_dir,
-    device_map="auto"
+    cache_dir=cache_dir
 )
 tokenizer = AutoTokenizer.from_pretrained(
     "YuWangX/mplus-8b",
-    cache_dir=cache_dir  # Add this line
+    cache_dir=cache_dir
 )
-model = model.to(torch.bfloat16)
+model = model.to(torch.bfloat16)  # need to call it again to cast the `inv_freq` in rotary_emb to bfloat16 as well
 model.put_ltm_to_numpy()  # Important for M+ model
-#model = model.cuda()
+model = model.cuda()
 
 
 
