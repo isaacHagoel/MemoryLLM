@@ -21,6 +21,7 @@ print("Loading MemoryLLM...")
 
 from modeling_mplus import MPlus
 
+# Option 1: MPlus-8B (pretrained, latest features)
 model = MPlus.from_pretrained(
     "YuWangX/mplus-8b", 
     attn_implementation="flash_attention_2", 
@@ -32,6 +33,32 @@ tokenizer = AutoTokenizer.from_pretrained(
     "YuWangX/mplus-8b",
     cache_dir=cache_dir
 )
+model_type = "pretrained"
+
+# Option 2: MemoryLLM-8B-Chat (proper chat model)
+# Uncomment these lines to use the chat model instead:
+#
+# from modeling_memoryllm import MemoryLLM
+# model = MemoryLLM.from_pretrained(
+#     "YuWangX/memoryllm-8b-chat", 
+#     attn_implementation="flash_attention_2", 
+#     torch_dtype=torch.bfloat16,
+#     cache_dir=cache_dir,
+#     low_cpu_mem_usage=True
+# )
+# tokenizer = AutoTokenizer.from_pretrained(
+#     "YuWangX/memoryllm-8b-chat",
+#     cache_dir=cache_dir
+# )
+# model_type = "chat"
+
+print(f"Loaded model type: {model_type}")
+
+# Fix tokenizer configuration for better outputs
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+    print(f"Set pad_token to eos_token: {tokenizer.pad_token}")
+
 # Move to GPU early to avoid Flash Attention warnings  
 model = model.to('cuda')  # Use .to('cuda') as recommended by Flash Attention
 model = model.to(torch.bfloat16)  # need to call it again to cast the `inv_freq` in rotary_emb to bfloat16 as well
@@ -56,23 +83,8 @@ print(f"Model device: {sample_param.device}")
 model_params = sum(p.numel() * p.element_size() for p in model.parameters()) / 1024**3
 print(f"Model parameter memory: {model_params:.2f} GB")
 
-# Check if gradients are being stored unnecessarily
-total_grad_params = 0
-for name, param in model.named_parameters():
-    if param.requires_grad:
-        total_grad_params += param.numel()
-if total_grad_params > 0:
-    print(f"WARNING: {total_grad_params / 1_000_000_000:.2f}B parameters have gradients enabled!")
-    print("This could double memory usage. Setting requires_grad=False for inference...")
-    for param in model.parameters():
-        param.requires_grad = False
-    torch.cuda.empty_cache()
-    
-    # Check memory again
-    free_memory, total_memory = torch.cuda.mem_get_info()
-    used_memory = total_memory - free_memory
-    print(f"GPU Memory after disabling gradients: {used_memory / 1024**3:.2f} GB / {total_memory / 1024**3:.2f} GB")
-
+# Note: Memory injection uses direct .data manipulation, not gradients
+# so gradient state doesn't affect memory injection functionality
 
 
 @app.route('/inject_memory', methods=['POST'])
@@ -115,14 +127,71 @@ def chat():
         message = data.get('message', '')
         max_tokens = data.get('max_tokens', 100)
         
-        # Format for pretrained model (exactly as README shows)
-        prompt = f"Question: {message} Answer:"
+        if model_type == "chat":
+            # Use proper chat template for chat models
+            messages = [{'role': 'user', 'content': message}]
+            inputs = tokenizer.apply_chat_template(
+                messages, 
+                return_tensors="pt", 
+                add_generation_prompt=True
+            )[:, 1:]  # Remove bos tokens as model has trained bos embeddings
+            input_ids = inputs.cuda()
+            
+            # Chat model terminators
+            terminators = [
+                tokenizer.eos_token_id,
+                tokenizer.convert_tokens_to_ids("<|eot_id|>")
+            ]
+            
+            outputs = model.generate(
+                input_ids=input_ids,
+                max_new_tokens=max_tokens,
+                eos_token_id=terminators,
+                do_sample=True,
+                temperature=0.7,
+                repetition_penalty=1.1
+            )
+            
+            response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+            
+        else:  # pretrained model
+            # Use pretrained format: "Question: ... Answer:"
+            prompt = f"Question: {message} Answer:"
+            
+            # Tokenize with attention mask
+            inputs = tokenizer(prompt, return_tensors='pt', add_special_tokens=False)
+            input_ids = inputs.input_ids.cuda()
+            attention_mask = inputs.attention_mask.cuda()
+            
+            # Add stop tokens to prevent continuing the Q&A pattern
+            stop_strings = ["Question:", "\nQuestion:", "Q:", "\nQ:"]
+            stop_token_ids = []
+            for stop_str in stop_strings:
+                tokens = tokenizer.encode(stop_str, add_special_tokens=False)
+                if tokens:
+                    stop_token_ids.extend(tokens)
+            
+            outputs = model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=max_tokens,
+                do_sample=True,
+                temperature=0.7,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=[tokenizer.eos_token_id] + stop_token_ids,  # Stop at EOS or "Question:"
+                repetition_penalty=1.1
+            )
+            
+            # Decode only the new tokens (skip the input prompt)
+            response = tokenizer.decode(outputs[0][input_ids.shape[1]:], skip_special_tokens=True)
+            
+            # Additional cleanup: stop at first occurrence of "Question" or similar
+            for stop_word in ["Question:", "Q:", "\nQuestion", "\nQ"]:
+                if stop_word in response:
+                    response = response.split(stop_word)[0]
+                    break
         
-        inputs = tokenizer(prompt, return_tensors='pt', add_special_tokens=False).input_ids.cuda()
-        outputs = model.generate(input_ids=inputs, max_new_tokens=max_tokens)
-        response = tokenizer.decode(outputs[0][inputs.shape[1]:])
-        
-        return jsonify({'response': response})
+        return jsonify({'response': response.strip()})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
