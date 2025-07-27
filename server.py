@@ -8,6 +8,10 @@ import logging
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# Limit PyTorch GPU memory usage to leave headroom for memory operations
+torch.cuda.set_per_process_memory_fraction(0.75)  # Use only 75% of GPU memory
+print(f"Limited PyTorch to 75% of GPU memory")
+
 # Set cache directory to persistent storage
 cache_dir = "/workspace/.cache/huggingface"
 os.makedirs(cache_dir, exist_ok=True)
