@@ -70,9 +70,9 @@ pip install transformers==4.46.0 --cache-dir "${PIP_CACHE_DIR}"
 echo "Installing peft..."
 pip install peft --cache-dir "${PIP_CACHE_DIR}"
 
-# Install Flask (force reinstall to avoid dependency conflicts)
+# Install Flask
 echo "Installing Flask..."
-pip install flask --force-reinstall --no-deps --cache-dir "${PIP_CACHE_DIR}"
+pip install flask --cache-dir "${PIP_CACHE_DIR}"
 
 # Create a persistent environment setup script
 echo "Creating persistent environment setup script..."

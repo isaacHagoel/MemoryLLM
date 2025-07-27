@@ -21,33 +21,40 @@
    ./setup.sh
    ```
 
-6. Start the server:
+6. Activate the virtual environment:
+   ```bash
+   source venv/bin/activate
+   ```
+   
+   *Note: All Python packages were installed in this virtual environment during setup.*
+
+7. Start the server:
    ```bash
    python server.py &
    ```
 
-7. Test the setup:
+8. Test the setup:
    ```bash
    curl http://localhost:8888/health
    ```
 
-8. Test memory injection:
+9. Test memory injection:
    ```bash
    curl -X POST http://localhost:8888/inject_memory \
      -H "Content-Type: application/json" \
      -d '{"context": "Alice loves chocolate cake and mentioned she also enjoys vanilla ice cream during our conversation yesterday."}'
    ```
 
-9. Test chat functionality:
-   ```bash
-   curl -X POST http://localhost:8888/chat \
-     -H "Content-Type: application/json" \
-     -d '{"message": "What does Alice like to eat?", "max_tokens": 50}'
-   ```
-   
-   *Note: The server uses MPlus-8B pretrained model with "Question: ... Answer:" format, not chat templates.*
+10. Test chat functionality:
+    ```bash
+    curl -X POST http://localhost:8888/chat \
+      -H "Content-Type: application/json" \
+      -d '{"message": "What does Alice like to eat?", "max_tokens": 50}'
+    ```
+    
+    *Note: The server uses MPlus-8B pretrained model with "Question: ... Answer:" format, not chat templates.*
 
-10. **Optional**: Inject large content from file:
+11. **Optional**: Inject large content from file:
     ```bash
     # Create a text file with your content
     echo "Your long multiline content here..." > input.txt
@@ -67,18 +74,20 @@ When the RunPod container restarts, all Python packages and model caches are pre
    ```bash
    source /workspace/setup_env.sh
    ```
+   
+   *Note: This script automatically activates the virtual environment and sets up all environment variables. You can see what it does by checking `setup_env_template.sh` in this repo.*
+
 3. Reinstall system packages:
    ```bash
    cd /workspace/MemoryLLM
    ./install_system_packages.sh
    ```
-   
-   *Note: The environment script is automatically created at `/workspace/setup_env.sh` during initial setup. You can see what it does by checking `setup_env_template.sh` in this repo.*
 
-4. Navigate to the project:
+4. Navigate to the project (if not already there):
    ```bash
    cd /workspace/MemoryLLM
    ```
+   
 5. Start the server:
    ```bash
    python server.py &
